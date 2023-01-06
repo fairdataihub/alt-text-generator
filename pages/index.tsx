@@ -13,14 +13,11 @@ const Home: NextPage = () => {
       </Head>
 
       <h1 className={styles.h1}> Alt Image Generator</h1>
-      <p>
+      <p className={styles.p}>
         Send a request to `/api/generate` with `imageUrl` as a query parameter:
       </p>
-      <Link
-        className={styles.highlight}
-        href="/api/generate?imageUrl=https://dub.sh/confpic"
-      >
-        http://localhost:3000/api/generate?imageUrl=https://dub.sh/confpic
+      <Link className={styles.highlight} href="/api/generate?imageUrl=https://dub.sh/confpic">
+        https://alt.fairdataihub.org/api/generate?imageUrl=https://dub.sh/confpic
       </Link>
     </div>
   );

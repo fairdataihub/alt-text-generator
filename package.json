@@ -6,7 +6,22 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "eslint --ignore-path .gitignore \"./**/*.+(ts|js|tsx)\"",
+    "format": "prettier --ignore-path .gitignore \"./**/*.+(ts|js|tsx)\" --write",
+    "prepare": "husky install",
+    "commit": "cz",
+    "semantic-release": "semantic-release"
+  },
+  "lint-staged": {
+    "./**/*.{ts,js,jsx,tsx}": [
+      "yarn lint --fix",
+      "yarn format"
+    ]
+  },
+  "config": {
+    "commitizen": {
+      "path": "cz-conventional-changelog"
+    }
   },
   "dependencies": {
     "next": "latest",
@@ -14,11 +29,31 @@
     "react-dom": "latest"
   },
   "devDependencies": {
+    "@commitlint/cli": "^17.4.0",
+    "@commitlint/config-conventional": "^17.4.0",
+    "@fairdataihub/config": "^2.2.1",
+    "@semantic-release/changelog": "^6.0.2",
+    "@semantic-release/commit-analyzer": "^9.0.2",
+    "@semantic-release/git": "^10.0.1",
+    "@semantic-release/github": "^8.0.7",
+    "@semantic-release/npm": "^9.0.1",
+    "@semantic-release/release-notes-generator": "^10.0.3",
     "@types/node": "18.11.10",
     "@types/react": "latest",
     "@types/react-dom": "18.0.9",
-    "eslint": "8.29.0",
-    "eslint-config-next": "13.0.6",
+    "commitizen": "^4.2.6",
+    "cz-conventional-changelog": "^3.3.0",
+    "eslint": "^8.31.0",
+    "eslint-config-next": "^13.1.1",
+    "eslint-config-prettier": "^8.6.0",
+    "eslint-import-resolver-typescript": "^3.5.2",
+    "eslint-plugin-prettier": "^4.2.1",
+    "husky": "^8.0.0",
+    "lint-staged": "^13.1.0",
+    "megasanjay-devmoji": "^1.2.1",
+    "prettier": "^2.8.1",
+    "prettier-plugin-tailwindcss": "^0.2.1",
+    "semantic-release": "^19.0.5",
     "typescript": "4.9.3"
   }
 }
