@@ -7,10 +7,7 @@ interface ExtendedNextApiRequest extends NextApiRequest {
   };
 }
 
-export default async function handler(
-  req: ExtendedNextApiRequest,
-  res: NextApiResponse<Data>
-) {
+export default async function handler(req: ExtendedNextApiRequest, res: NextApiResponse<Data>) {
   const { imageUrl } = req.query;
   // POST request to Replicate to start the alt generation process
   let startResponse = await fetch("https://api.replicate.com/v1/predictions", {
@@ -20,8 +17,7 @@ export default async function handler(
       Authorization: "Token " + process.env.REPLICATE_API_KEY,
     },
     body: JSON.stringify({
-      version:
-        "2e1dddc8621f72155f24cf2e0adbde548458d3cab9f00c0139eea840d0ac4746",
+      version: "2e1dddc8621f72155f24cf2e0adbde548458d3cab9f00c0139eea840d0ac4746",
       input: { image: imageUrl },
     }),
   });
