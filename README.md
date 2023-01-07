@@ -75,6 +75,6 @@ Note: You will not need to do anything to the hosted site. Continuous Delivery h
 
 ## Acknowledgements
 
-A special thank you to Vercel for hosting our application documentation.
+A special thank you to Vercel for hosting this application.
 
 ![](https://www.datocms-assets.com/31049/1618983297-powered-by-vercel.svg)
