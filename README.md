@@ -1,8 +1,5 @@
 # Alt Image Generator
 
-![](https://api.checklyhq.com/v1/badges/checks/d2688515-8cdc-456d-8cb4-f8763d6a35f8?style=flat&theme=default)
-![](https://api.checklyhq.com/v1/badges/checks/d2688515-8cdc-456d-8cb4-f8763d6a35f8?style=flat&theme=default&responseTime=true)
-
 This project will generate relevant alt text for images using AI.
 
 ![Alt Image Generator](ogimage.png)
