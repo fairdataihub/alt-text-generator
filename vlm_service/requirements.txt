@@ -1,0 +1,36 @@
+# R-4B VLM Service Dependencies
+# ==============================
+# 
+# Environment: vlm-env (separate from main project)
+# Python: 3.12+
+#
+# Setup:
+#   python3 -m venv vlm-env
+#   source vlm-env/bin/activate
+#   pip install -r vlm_service/requirements.txt
+
+# Core ML frameworks
+torch>=2.0.0
+torchvision>=0.15.0
+transformers>=4.40.0
+accelerate>=0.25.0
+
+# HuggingFace utilities
+huggingface_hub>=0.20.0
+safetensors>=0.4.0
+tokenizers>=0.15.0
+
+# Vision utilities
+pillow>=10.0.0
+qwen-vl-utils>=0.0.10
+
+# API server
+flask>=3.0.0
+requests>=2.31.0
+
+# Optional: 4-bit quantization (reduces VRAM from ~10GB to ~5GB)
+# bitsandbytes>=0.41.0
+
+# Optional: For faster inference on NVIDIA GPUs
+# flash-attn>=2.5.0
+

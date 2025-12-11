@@ -39,3 +39,16 @@ yarn-error.log*
 
 # typescript
 *.tsbuildinfo
+
+# Python virtual environments
+vlm-env/
+venv/
+.venv/
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# VLM model cache (can be large)
+.cache/
+*.gguf
