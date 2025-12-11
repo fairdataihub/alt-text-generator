@@ -159,7 +159,7 @@ export VLM_4BIT=true
 ```
 
 ### Model download issues
-Ensure you're logged into HuggingFace:
+Ensure you're logged into Hugging Face:
 ```bash
 huggingface-cli login
 ```

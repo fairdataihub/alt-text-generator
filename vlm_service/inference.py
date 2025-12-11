@@ -108,6 +108,12 @@ class VLMInference:
         if isinstance(image_source, Image.Image):
             return image_source
         
+        if not isinstance(image_source, str):
+            raise TypeError(
+                f"image_source must be a URL or filesystem path string, or a PIL.Image.Image instance; "
+                f"got {type(image_source)!r}"
+            )
+        
         if image_source.startswith(("http://", "https://")):
             response = requests.get(image_source, timeout=30)
             response.raise_for_status()
