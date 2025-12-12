@@ -118,26 +118,6 @@ caption = vlm.generate_caption(
 | `VLM_PORT` | 5000 | Port for Flask server |
 | `VLM_4BIT` | false | Enable 4-bit quantization |
 
-## Integration with Next.js
-
-The Next.js API at `/api/generate` can be updated to call this local service instead of Replicate:
-
-```typescript
-// pages/api/generate.ts
-const VLM_SERVICE_URL = process.env.VLM_SERVICE_URL || "http://localhost:5000";
-
-export default async function handler(req, res) {
-  const { imageUrl } = req.query;
-  
-  const response = await fetch(
-    `${VLM_SERVICE_URL}/generate?imageUrl=${encodeURIComponent(imageUrl)}`
-  );
-  const data = await response.json();
-  
-  res.status(200).json(data.alt_text);
-}
-```
-
 ## Comparison with Previous Setup
 
 | Aspect | Old (BLIP/Replicate) | New (R-4B Local) |

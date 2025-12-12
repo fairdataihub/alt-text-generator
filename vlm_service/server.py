@@ -1,19 +1,18 @@
 """
-Flask API Server for R-4B VLM Inference
-========================================
+R-4B Alt Text Generator API
+============================
 
-Provides a REST API for the Next.js frontend to call for image captioning.
+Standalone Flask API server for generating image alt text using the R-4B VLM.
 
 Endpoints:
-    GET /health - Health check
-    POST /generate - Generate alt text for an image
-    GET /generate?imageUrl=<url> - Generate alt text (GET variant)
+    GET /         - Landing page
+    GET /health   - Health check (JSON)
+    GET/POST /generate?imageUrl=<url> - Generate alt text
 
 Usage:
     source vlm-env/bin/activate
     python vlm_service/server.py
     
-    # Then the Next.js app can call:
     curl "http://localhost:5000/generate?imageUrl=https://example.com/image.jpg"
 """
 
@@ -23,7 +22,7 @@ import logging
 # Force use of GPU 0 (e.g., RTX 4090) to avoid multi-GPU memory issues
 os.environ.setdefault("CUDA_VISIBLE_DEVICES", "0")
 
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, render_template_string
 from inference import VLMInference
 
 # Configure logging
@@ -115,20 +114,113 @@ def generate():
         return jsonify({"error": str(e)}), 500
 
 
+LANDING_PAGE = """
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Alt Text Generator</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            color: #e0e0e0;
+            min-height: 100vh;
+            padding: 2rem;
+        }
+        .container { max-width: 800px; margin: 0 auto; }
+        h1 { 
+            font-size: 2.5rem; 
+            margin-bottom: 0.5rem;
+            background: linear-gradient(90deg, #00d4ff, #7b2cbf);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        .subtitle { color: #888; margin-bottom: 2rem; }
+        .model-info {
+            background: rgba(255,255,255,0.05);
+            border-radius: 12px;
+            padding: 1.5rem;
+            margin-bottom: 2rem;
+            border: 1px solid rgba(255,255,255,0.1);
+        }
+        .model-info h2 { font-size: 1rem; color: #888; margin-bottom: 1rem; }
+        .stats { display: flex; gap: 2rem; flex-wrap: wrap; }
+        .stat { }
+        .stat-value { font-size: 1.5rem; font-weight: bold; color: #00d4ff; }
+        .stat-label { font-size: 0.85rem; color: #888; }
+        .endpoint {
+            background: rgba(0,0,0,0.3);
+            border-radius: 8px;
+            padding: 1rem 1.5rem;
+            margin-bottom: 1rem;
+            font-family: 'Monaco', 'Menlo', monospace;
+            font-size: 0.9rem;
+        }
+        .endpoint code { color: #00d4ff; }
+        a { color: #7b2cbf; }
+        .try-it {
+            margin-top: 2rem;
+            padding: 1rem;
+            background: rgba(123, 44, 191, 0.2);
+            border-radius: 8px;
+            border: 1px solid rgba(123, 44, 191, 0.3);
+        }
+        .try-it a { 
+            color: #00d4ff; 
+            word-break: break-all;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Alt Text Generator</h1>
+        <p class="subtitle">Generate image descriptions using AI</p>
+        
+        <div class="model-info">
+            <h2>MODEL</h2>
+            <div class="stats">
+                <div class="stat">
+                    <div class="stat-value">R-4B</div>
+                    <div class="stat-label">YannQi/R-4B</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-value">72.6</div>
+                    <div class="stat-label">MMStar Score</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-value">4.82B</div>
+                    <div class="stat-label">Parameters</div>
+                </div>
+            </div>
+        </div>
+        
+        <h2 style="margin-bottom: 1rem; font-size: 1rem; color: #888;">API USAGE</h2>
+        
+        <div class="endpoint">
+            <code>GET /generate?imageUrl=&lt;url&gt;</code>
+        </div>
+        
+        <div class="endpoint">
+            <code>POST /generate</code> with JSON body: <code>{"imageUrl": "..."}</code>
+        </div>
+        
+        <div class="try-it">
+            <strong>Try it:</strong><br>
+            <a href="/generate?imageUrl=https://dub.sh/confpic">/generate?imageUrl=https://dub.sh/confpic</a>
+        </div>
+    </div>
+</body>
+</html>
+"""
+
+
 @app.route("/", methods=["GET"])
 def index():
-    """Root endpoint with API info."""
-    return jsonify({
-        "name": "R-4B Alt Text Generator API",
-        "model": "YannQi/R-4B",
-        "mmstar_score": 72.6,
-        "parameters": "4.82B",
-        "endpoints": {
-            "/health": "GET - Health check",
-            "/generate": "GET/POST - Generate alt text (requires imageUrl param)",
-        },
-        "example": "/generate?imageUrl=https://example.com/image.jpg"
-    })
+    """Landing page."""
+    return render_template_string(LANDING_PAGE)
 
 
 if __name__ == "__main__":
