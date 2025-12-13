@@ -39,3 +39,10 @@ yarn-error.log*
 
 # typescript
 *.tsbuildinfo
+
+# Python virtual environments
+vlm-env/
+venv/
+.venv/
+__pycache__/
+*.py[cod]

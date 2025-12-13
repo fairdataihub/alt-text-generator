@@ -1,0 +1,14 @@
+# Ollama Alt Text Generator - Minimal Dependencies
+# =================================================
+#
+# This is the lightweight version - no PyTorch, no Transformers!
+# Model inference is handled by Ollama.
+#
+# Prerequisites:
+#   1. Install Ollama: curl -fsSL https://ollama.com/install.sh | sh
+#   2. Pull model: ollama pull qwen3-vl:4b
+#   3. Start Ollama: ollama serve
+
+flask>=3.0.0
+requests>=2.31.0
+
