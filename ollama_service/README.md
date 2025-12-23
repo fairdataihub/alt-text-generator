@@ -34,7 +34,7 @@ curl -fsSL https://ollama.com/install.sh | sh
 ollama pull qwen3-vl:4b
 ```
 
-### 3. Start Ollama (if not running as service)
+### 3. Start Ollama (if not running as a service)
 
 ```bash
 ollama serve

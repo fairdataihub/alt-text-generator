@@ -37,15 +37,112 @@ OLLAMA_HOST = os.environ.get("OLLAMA_HOST", "http://localhost:11434")
 MODEL_NAME = os.environ.get("OLLAMA_MODEL", "qwen3-vl:4b")
 DEFAULT_PROMPT = "Describe this image in one concise sentence for alt text."
 
+# Image fetch constraints
+MAX_IMAGE_BYTES = 10 * 1024 * 1024  # 10 MiB
+ALLOWED_IMAGE_MIME_TYPES = {
+    "image/jpeg",
+    "image/png",
+    "image/gif",
+    "image/webp",
+    "image/jpg",
+}
+MAX_REDIRECTS = 5
+
+# Blocked IP ranges for SSRF protection
+BLOCKED_IP_PREFIXES = (
+    "127.", "10.", "192.168.", "172.16.", "172.17.", "172.18.", "172.19.",
+    "172.20.", "172.21.", "172.22.", "172.23.", "172.24.", "172.25.",
+    "172.26.", "172.27.", "172.28.", "172.29.", "172.30.", "172.31.",
+    "0.", "169.254.", "::1", "fc00:", "fe80:", "localhost"
+)
+
 # Initialize Flask app
 app = Flask(__name__)
 
 
+def validate_url(url: str) -> None:
+    """
+    Validate URL to prevent SSRF attacks.
+    Raises ValueError if URL is invalid or points to blocked resources.
+    """
+    from urllib.parse import urlparse
+    import socket
+    
+    parsed = urlparse(url)
+    
+    # Enforce http/https only
+    if parsed.scheme not in ("http", "https"):
+        raise ValueError("Only HTTP and HTTPS URLs are allowed")
+    
+    if not parsed.netloc:
+        raise ValueError("Invalid URL: missing host")
+    
+    # Extract hostname (handle port if present)
+    hostname = parsed.hostname or parsed.netloc.split(":")[0]
+    
+    # Block localhost and private IPs by hostname
+    hostname_lower = hostname.lower()
+    if any(hostname_lower.startswith(prefix) or hostname_lower == prefix.rstrip(".")
+           for prefix in BLOCKED_IP_PREFIXES):
+        raise ValueError("Access to internal network resources is not allowed")
+    
+    # Resolve hostname and check IP
+    try:
+        ip = socket.gethostbyname(hostname)
+        if any(ip.startswith(prefix) for prefix in BLOCKED_IP_PREFIXES):
+            raise ValueError("Access to internal network resources is not allowed")
+    except socket.gaierror:
+        raise ValueError(f"Unable to resolve hostname: {hostname}")
+
+
 def fetch_image_as_base64(image_url: str) -> str:
-    """Download an image from URL and return as base64 string."""
-    response = requests.get(image_url, timeout=30)
-    response.raise_for_status()
-    return base64.b64encode(response.content).decode('utf-8')
+    """
+    Download an image from URL and return as base64 string.
+    Includes validation for content type, size limits, and redirect restrictions.
+    """
+    # Validate URL before fetching
+    validate_url(image_url)
+    
+    with requests.Session() as session:
+        session.max_redirects = MAX_REDIRECTS
+        
+        response = session.get(
+            image_url,
+            timeout=30,
+            stream=True,
+        )
+        response.raise_for_status()
+        
+        # Validate content type
+        content_type = response.headers.get("Content-Type", "")
+        mime_type = content_type.split(";", 1)[0].strip().lower()
+        if mime_type not in ALLOWED_IMAGE_MIME_TYPES:
+            raise ValueError(f"Unsupported content type: {mime_type}. Expected an image.")
+        
+        # Check declared content length if available
+        content_length = response.headers.get("Content-Length")
+        if content_length is not None:
+            try:
+                length = int(content_length)
+                if length > MAX_IMAGE_BYTES:
+                    raise ValueError(
+                        f"Image too large ({length // (1024*1024)}MB). "
+                        f"Maximum allowed: {MAX_IMAGE_BYTES // (1024*1024)}MB"
+                    )
+            except ValueError:
+                pass  # Invalid Content-Length header, continue with streaming check
+        
+        # Stream content and enforce max size
+        chunks = bytearray()
+        for chunk in response.iter_content(chunk_size=8192):
+            if chunk:
+                chunks.extend(chunk)
+                if len(chunks) > MAX_IMAGE_BYTES:
+                    raise ValueError(
+                        f"Image exceeded maximum size of {MAX_IMAGE_BYTES // (1024*1024)}MB"
+                    )
+        
+        return base64.b64encode(bytes(chunks)).decode("utf-8")
 
 
 def generate_caption(image_base64: str, prompt: str = DEFAULT_PROMPT) -> str:
@@ -205,7 +302,8 @@ def health():
         response = requests.get(f"{OLLAMA_HOST}/api/tags", timeout=5)
         ollama_ok = response.status_code == 200
         models = [m["name"] for m in response.json().get("models", [])]
-        model_available = any(MODEL_NAME in m for m in models)
+        # Use exact matching to avoid false positives from similar model names
+        model_available = any(m == MODEL_NAME for m in models)
     except Exception as e:
         ollama_ok = False
         model_available = False
@@ -266,9 +364,18 @@ def generate():
         return jsonify({
             "error": "Cannot connect to Ollama. Is it running? Start with: ollama serve"
         }), 503
+    except ValueError as e:
+        # ValueError is raised by our validation functions with safe messages
+        logger.warning(f"Validation error: {e}")
+        return jsonify({"error": str(e)}), 400
+    except requests.exceptions.RequestException as e:
+        # Network/HTTP errors when fetching image
+        logger.error(f"Error fetching image: {e}", exc_info=True)
+        return jsonify({"error": "Failed to fetch image from the provided URL"}), 400
     except Exception as e:
+        # Log full exception internally but return generic message to client
         logger.error(f"Error generating caption: {e}", exc_info=True)
-        return jsonify({"error": str(e)}), 500
+        return jsonify({"error": "An internal error occurred while processing the request"}), 500
 
 
 if __name__ == "__main__":
