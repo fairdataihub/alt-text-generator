@@ -2,6 +2,22 @@
 
 Lightweight alt text generation service using **Ollama** - no Python ML dependencies required.
 
+## Quick Start
+
+```bash
+# Clone the repository
+git clone https://github.com/fairdataihub/alt-text-generator.git
+cd alt-text-generator
+
+# Install Ollama and pull the vision model
+curl -fsSL https://ollama.com/install.sh | sh
+ollama pull qwen3-vl:4b
+
+# Install Python dependencies and start the server
+pip install flask requests
+python ollama_service/server.py
+```
+
 ## Why Ollama?
 
 | Aspect | Transformers Version | Ollama Version |
@@ -81,7 +97,7 @@ curl http://localhost:5000/health
 Generate alt text for an image.
 
 ```bash
-curl "http://localhost:5000/generate?imageUrl=https://dub.sh/confpic"
+curl "http://localhost:5000/generate?imageUrl=https://fairdataihub.org/images/blog/ismb-2025/dorian-team.jpeg"
 ```
 
 #### `POST /generate`
