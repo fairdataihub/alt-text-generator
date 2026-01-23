@@ -1,48 +1,51 @@
+# Git ignore file for Alt Text Generator project
 # See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
 
-# Dependencies
+# Node.js dependencies (if any frontend components are added)
 /node_modules
 /.pnp
 .pnp.js
 
-# Testing
+# Testing artifacts
 /coverage
 
-# Next.js
+# Next.js build artifacts (if any Next.js components are added)
 /.next/
 /out/
 
-# Production
+# Production build artifacts
 build
 dist
 
-# Misc
-.DS_Store
-*.pem
+# Miscellaneous system files
+.DS_Store  # macOS Finder metadata
+*.pem  # Private key files
 
-# Debug
+# Debug logs
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 
-# Local ENV files
+# Local environment files (contain sensitive configuration)
 .env.local
 .env.development.local
 .env.test.local
 .env.production.local
 
-# Vercel
+# Vercel deployment files (if using Vercel)
 .vercel
 
-# Turborepo
+# Turborepo cache (if using Turborepo)
 .turbo
 
-# typescript
+# TypeScript build info (if TypeScript is added)
 *.tsbuildinfo
 
-# Python virtual environments
+# Python-specific ignores
+# Virtual environments (should not be committed)
 vlm-env/
 venv/
 .venv/
+# Python bytecode and cache files
 __pycache__/
-*.py[cod]
+*.py[cod]  # .pyc, .pyo, .pyd files
