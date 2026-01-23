@@ -67,8 +67,8 @@ jobs:
           REPO_NAME="${GITHUB_REPOSITORY#*/}"
           DEST="~/deploy/$REPO_NAME"
           # Use APP_PORT secret if available, otherwise default to 23711
-          PORT="${{ secrets.GPU_SERVER_APP_PORT }}"
-          PORT="${PORT:-23711}"
+          APP_PORT="${{ secrets.GPU_SERVER_APP_PORT }}"
+          APP_PORT="${APP_PORT:-23711}"
 
           # SSH into the server and execute deployment commands
           ssh -i ~/.ssh/id_ed25519 ${{ secrets.GPU_SERVER_SSH_USER }}@${{ secrets.GPU_SERVER_SSH_HOST }} << EOF
@@ -78,7 +78,7 @@ jobs:
           cd $DEST
 
           # Export port for docker-compose to use
-          export APP_PORT=${PORT:-23711}
+          export APP_PORT=$APP_PORT
 
           # Verify Docker and Docker Compose are available
           docker version
@@ -90,13 +90,10 @@ jobs:
           # --build: rebuild images before starting
           # --remove-orphans: remove containers for services not in compose file
           docker compose -f docker-compose.yml up -d --build --remove-orphans
-          # Optional: clean up unused Docker images (currently commented out)
-          # docker system prune -f --volumes
           EOF
 
       # Health check: verify the application is running and healthy
       - name: Health check
-        shell: bash
         run: |
           set -euo pipefail
           REPO_NAME="${GITHUB_REPOSITORY#*/}"
@@ -104,7 +101,6 @@ jobs:
           PORT="${PORT:-23711}"
 
           ssh -i ~/.ssh/id_ed25519 \
-            -o StrictHostKeyChecking=yes \
             "${{ secrets.GPU_SERVER_SSH_USER }}@${{ secrets.GPU_SERVER_SSH_HOST }}" \
             "REPO_NAME='$REPO_NAME' PORT='$PORT' bash -s" <<'HEALTH_EOF'
           set -euo pipefail
