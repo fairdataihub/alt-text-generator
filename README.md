@@ -1,77 +1,154 @@
-# Alt Image Generator
+# Alt Text Generator (Ollama Edition)
 
-This project will generate relevant alt text for images using AI.
+Lightweight alt text generation service using **Ollama** - no Python ML dependencies required.
 
-![Alt Image Generator](ogimage.png)
-
-## How it works
-
-It uses an ML modal from Salesforce called [BLIP](https://github.com/salesforce/BLIP) on [Replicate](https://replicate.com/) to generate relevant alt text for images. You can feed the Next.js API route an image as a query param and it will return a one sentence description of that image.
-
-## Project setup
-
-Make sure to install the dependencies.
+## Quick Start
 
 ```bash
-yarn install
+# Clone the repository
+git clone https://github.com/fairdataihub/alt-text-generator.git
+cd alt-text-generator
+
+# Install Ollama and pull the vision model
+curl -fsSL https://ollama.com/install.sh | sh
+ollama pull qwen3-vl:4b
+
+# Install Python dependencies and start the server
+pip install -r requirements.txt
+python server.py
 ```
 
-After cloning the repo, go to [Replicate](https://replicate.com/) to make an account and put your API key in a file called `.env.local`.
+## Why Ollama?
 
-### Compiles and hot-reloads for development
+| Aspect | Transformers Version | Ollama Version |
+|--------|---------------------|----------------|
+| Python deps | PyTorch, Transformers, etc (~5-10GB) | Flask, Requests (~1MB) |
+| Model management | Manual HF cache | `ollama pull/list/rm` |
+| Setup complexity | Virtual env, CUDA, etc | Single binary + one command |
+| Portability | Python 3.10+, CUDA | Any system Ollama supports |
 
-Then, run the application in the command line and it will be available at `http://localhost:3000`.
+## Model
+
+| Property | Value |
+|----------|-------|
+| **Model** | qwen3-vl:4b |
+| **Parameters** | 4B |
+| **Size** | 3.3 GB |
+| **Runtime** | Ollama |
+
+## Prerequisites
+
+### 1. Install Ollama
 
 ```bash
-yarn dev
+curl -fsSL https://ollama.com/install.sh | sh
 ```
 
-### How to use
-
-To use the API route, go to the link below in your browser or run a curl command in your terminal to get a sample result. Feel free to replace the dub.sh link with a link to any image.
+### 2. Pull the model
 
 ```bash
-curl http://localhost:3000/api/generate?imageUrl=https://dub.sh/confpic
+ollama pull qwen3-vl:4b
 ```
 
-### Compiles and minifies for production
-
-Use this step to build a local production version of the site. Use `start` to preview the local build.
+### 3. Start Ollama (if not running as a service)
 
 ```bash
-yarn build
-yarn start
+ollama serve
 ```
 
-### Requirements
+## Setup
 
-- Node.js >= 16.14.0
-- Yarn 1 (Classic)
+### Install Python dependencies (minimal!)
 
-### Directory Structure
+```bash
+pip install -r requirements.txt
+# That's it! No PyTorch, no Transformers, no CUDA toolkit
+```
 
-- [`.github`](.github) — GitHub configuration including the CI workflow.<br>
-- [`.husky`](.husky) — Husky configuration and hooks.<br>
-- [`public`](./public) — Static assets such as robots.txt, images, and favicon.<br>
-- [`pages`](./pages) — Application source code, including pages, components, styles.
+Or install directly:
 
-### Scripts
+```bash
+pip install flask requests
+```
 
-- `yarn dev` — Starts the application in development mode at `http://localhost:3000`.
-- `yarn build` — Creates an optimized production build of your application.
-- `yarn start` — Starts the application in production mode.
-- `yarn type-check` — Validate code using TypeScript compiler.
-- `yarn lint` — Runs ESLint for all files in the `src` directory.
-- `yarn format` — Runs Prettier for all files in the `src` directory.
+## Usage
+
+### Start the server
+
+```bash
+python server.py
+```
+
+Server runs on `http://localhost:5000` by default.
+
+### API Endpoints
+
+#### `GET /`
+Landing page with API info.
+
+#### `GET /health`
+Health check - verifies Ollama is running and model is available.
+
+```bash
+curl http://localhost:5000/health
+```
+
+#### `GET /generate?imageUrl=<url>`
+Generate alt text for an image.
+
+```bash
+curl "http://localhost:5000/generate?imageUrl=https://fairdataihub.org/images/blog/ismb-2025/dorian-team.jpeg"
+```
+
+#### `POST /generate`
+Generate alt text with custom prompt.
+
+```bash
+curl -X POST http://localhost:5000/generate \
+  -H "Content-Type: application/json" \
+  -d '{
+    "imageUrl": "https://example.com/image.jpg",
+    "prompt": "Describe this image for a visually impaired user."
+  }'
+```
+
+## Environment Variables
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `PORT` | 5000 | Server port |
+| `OLLAMA_HOST` | http://localhost:11434 | Ollama API URL |
+| `OLLAMA_MODEL` | qwen3-vl:4b | Model to use |
+
+## Comparison with Transformers Version
+
+| Metric | Transformers (R-4B) | Ollama (qwen3-vl:4b) |
+|--------|--------------------|-----------------------|
+| MMStar Score | 72.6 | TBD (likely lower) |
+| Parameters | 4.82B | 4B |
+| Python deps | ~5-10GB | ~1MB |
+| Setup time | 10-15 min | 2 min |
+| Model download | ~10GB (HF) | 3.3GB (Ollama) |
+
+## Troubleshooting
+
+### "Cannot connect to Ollama"
+Make sure Ollama is running:
+```bash
+ollama serve
+```
+
+### Model not found
+Pull the model:
+```bash
+ollama pull qwen3-vl:4b
+```
+
+### Check available models
+```bash
+ollama list
+```
 
 ## License
 
-This project is licensed under the MIT License - see the [LICENSE.md](LICENSE.md) file for more information.
-
-Note: You will not need to do anything to the hosted site. Continuous Delivery has been setup with Vercel. All you need to do is push your commit and wait for it to deploy.
-
-## Acknowledgements
-
-A special thank you to Vercel for hosting this application.
-
-![](https://www.datocms-assets.com/31049/1618983297-powered-by-vercel.svg)
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for more information.

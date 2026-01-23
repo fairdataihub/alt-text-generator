@@ -13,7 +13,7 @@ Prerequisites:
     3. Start Ollama: ollama serve
 
 Usage:
-    python ollama_service/server.py
+    python server.py
     curl "http://localhost:5000/generate?imageUrl=https://example.com/image.jpg"
 """
 
@@ -385,4 +385,3 @@ if __name__ == "__main__":
     
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port, debug=False)
-
