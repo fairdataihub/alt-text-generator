@@ -3,13 +3,13 @@
 
 services:
   # Main application service
-  dmp-generator:
+  alt-text-generator:
     # Build configuration
     build:
       context: . # Build context is the current directory
       dockerfile: Dockerfile # Use the Dockerfile in the root directory
     # Image name and tag
-    image: dmp-generator:latest
+    image: alt-text-generator:latest
     # Container name for easier identification
     container_name: alt-text-generator
 
