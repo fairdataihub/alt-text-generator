@@ -21,8 +21,9 @@ import os
 import base64
 import logging
 from contextlib import suppress
-from urllib.parse import urlparse
+from urllib.parse import urlparse, urljoin
 import socket
+import ipaddress
 
 import requests
 from flask import Flask, request, jsonify
@@ -133,14 +134,47 @@ def validate_url(url: str) -> None:
     ):
         raise ValueError("Access to internal network resources is not allowed")
 
-    # Resolve hostname and check IP
+    # Resolve hostname and check IP (IPv4 and IPv6)
     # Even if hostname looks safe, resolve it to IP and check if IP is blocked
     # This prevents DNS rebinding attacks where a public hostname resolves to private IP
     try:
-        ip = socket.gethostbyname(hostname)
-        # Check if resolved IP matches any blocked prefix
-        if any(ip.startswith(prefix) for prefix in BLOCKED_IP_PREFIXES):
-            raise ValueError("Access to internal network resources is not allowed")
+        # Use getaddrinfo to handle both IPv4 and IPv6 addresses
+        addrinfos = socket.getaddrinfo(hostname, None)
+
+        # Explicit network ranges for private / loopback / link-local addresses
+        # Using ip_network here avoids brittle string-prefix checks
+        private_networks = (
+            ipaddress.ip_network("10.0.0.0/8"),        # IPv4 private
+            ipaddress.ip_network("172.16.0.0/12"),      # IPv4 private
+            ipaddress.ip_network("192.168.0.0/16"),    # IPv4 private
+            ipaddress.ip_network("127.0.0.0/8"),       # IPv4 loopback
+            ipaddress.ip_network("169.254.0.0/16"),    # IPv4 link-local
+            ipaddress.ip_network("::1/128"),            # IPv6 loopback
+            ipaddress.ip_network("fc00::/7"),           # IPv6 unique local
+            ipaddress.ip_network("fe80::/10"),          # IPv6 link-local
+        )
+
+        for family, _, _, _, sockaddr in addrinfos:
+            ip_str = sockaddr[0]
+
+            # Normalize to an ipaddress object (handles both IPv4 and IPv6)
+            try:
+                ip_obj = ipaddress.ip_address(ip_str)
+            except ValueError:
+                # Skip any unusual/non-IP results
+                continue
+
+            # Block clearly non-public targets
+            # Check built-in properties and explicit network ranges
+            if (
+                ip_obj.is_private
+                or ip_obj.is_loopback
+                or ip_obj.is_link_local
+                or ip_obj.is_reserved
+                or any(ip_obj in net for net in private_networks)
+            ):
+                raise ValueError("Access to internal network resources is not allowed")
+
     except socket.gaierror as e:
         # DNS resolution failed - reject the URL
         raise ValueError(f"Unable to resolve hostname: {hostname}") from e
@@ -150,63 +184,106 @@ def fetch_image_as_base64(image_url: str) -> str:
     """
     Download an image from URL and return as base64 string.
     Includes validation for content type, size limits, and redirect restrictions.
+    Manually handles redirects with validation to prevent SSRF attacks.
     """
     # Validate URL before fetching to prevent SSRF attacks
     validate_url(image_url)
 
-    # Use a session to manage redirects and connection pooling
+    # Use a session for connection pooling (but disable automatic redirects)
     with requests.Session() as session:
-        # Limit redirects to prevent infinite redirect loops
-        session.max_redirects = MAX_REDIRECTS
+        current_url = image_url
+        redirect_count = 0
+        response = None
 
-        # Fetch the image with streaming enabled (don't load entire file into memory at once)
-        response = session.get(
-            image_url,
-            timeout=30,  # 30 second timeout to prevent hanging requests
-            stream=True,  # Stream the response instead of loading it all at once
-        )
-        # Raise an exception if HTTP status code indicates an error (4xx, 5xx)
-        response.raise_for_status()
-
-        # Validate content type
-        # Extract MIME type from Content-Type header (ignore charset and other parameters)
-        content_type = response.headers.get("Content-Type", "")
-        mime_type = content_type.split(";", 1)[0].strip().lower()
-        # Only allow known image types to prevent downloading malicious files
-        if mime_type not in ALLOWED_IMAGE_MIME_TYPES:
-            raise ValueError(
-                f"Unsupported content type: {mime_type}. Expected an image."
+        # Manually follow redirects with validation
+        while True:
+            # Fetch the URL with redirects disabled to validate each target
+            response = session.get(
+                current_url,
+                timeout=30,  # 30 second timeout to prevent hanging requests
+                stream=True,  # Stream the response instead of loading it all at once
+                allow_redirects=False,  # Disable automatic redirects - we'll handle them manually
             )
 
-        # Check declared content length if available
-        # This is an early check before downloading the entire file
-        content_length = response.headers.get("Content-Length")
-        if content_length is not None:
-            # Suppress ValueError if Content-Length is not a valid integer
-            with suppress(ValueError):
-                length = int(content_length)
-                # Reject files that are too large before downloading
-                if length > MAX_IMAGE_BYTES:
+            # Check if this is a redirect response (3xx status codes)
+            if response.status_code in {301, 302, 303, 307, 308}:
+                redirect_count += 1
+
+                # Enforce maximum redirect depth
+                if redirect_count > MAX_REDIRECTS:
                     raise ValueError(
-                        f"Image too large ({length // (1024*1024)}MB). "
-                        f"Maximum allowed: {MAX_IMAGE_BYTES // (1024*1024)}MB"
+                        f"Too many redirects (maximum {MAX_REDIRECTS} allowed)"
                     )
 
-        # Stream content and enforce max size
-        # Read the image in chunks to avoid loading everything into memory
-        chunks = bytearray()
-        for chunk in response.iter_content(chunk_size=8192):  # 8KB chunks
-            if chunk:
-                chunks.extend(chunk)
-                # Check size after each chunk to stop early if too large
-                # (Some servers don't send Content-Length header)
-                if len(chunks) > MAX_IMAGE_BYTES:
+                # Extract the redirect target from Location header
+                location = response.headers.get("Location")
+                if not location:
+                    raise ValueError("Redirect response missing Location header")
+
+                # Resolve relative redirects against the current URL
+                # urljoin handles both absolute and relative URLs correctly
+                redirect_url = urljoin(current_url, location)
+
+                # Validate the redirect target URL to prevent SSRF
+                # This is critical - we must validate every redirect target
+                validate_url(redirect_url)
+
+                # Optional: Forbid cross-host redirects for additional security
+                # This prevents redirects from public hosts to internal hosts
+                current_parsed = urlparse(current_url)
+                redirect_parsed = urlparse(redirect_url)
+                if current_parsed.netloc.lower() != redirect_parsed.netloc.lower():
+                    # Cross-host redirect detected - reject for security
                     raise ValueError(
-                        f"Image exceeded maximum size of {MAX_IMAGE_BYTES // (1024*1024)}MB"
+                        "Cross-host redirects are not allowed for security reasons"
                     )
 
-        # Convert binary image data to base64 string for Ollama API
-        return base64.b64encode(bytes(chunks)).decode("utf-8")
+                # Follow the redirect
+                current_url = redirect_url
+                continue
+
+            # Not a redirect - check for errors and proceed with content validation
+            response.raise_for_status()
+
+            # Validate content type
+            # Extract MIME type from Content-Type header (ignore charset and other parameters)
+            content_type = response.headers.get("Content-Type", "")
+            mime_type = content_type.split(";", 1)[0].strip().lower()
+            # Only allow known image types to prevent downloading malicious files
+            if mime_type not in ALLOWED_IMAGE_MIME_TYPES:
+                raise ValueError(
+                    f"Unsupported content type: {mime_type}. Expected an image."
+                )
+
+            # Check declared content length if available
+            # This is an early check before downloading the entire file
+            content_length = response.headers.get("Content-Length")
+            if content_length is not None:
+                # Suppress ValueError if Content-Length is not a valid integer
+                with suppress(ValueError):
+                    length = int(content_length)
+                    # Reject files that are too large before downloading
+                    if length > MAX_IMAGE_BYTES:
+                        raise ValueError(
+                            f"Image too large ({length // (1024*1024)}MB). "
+                            f"Maximum allowed: {MAX_IMAGE_BYTES // (1024*1024)}MB"
+                        )
+
+            # Stream content and enforce max size
+            # Read the image in chunks to avoid loading everything into memory
+            chunks = bytearray()
+            for chunk in response.iter_content(chunk_size=8192):  # 8KB chunks
+                if chunk:
+                    chunks.extend(chunk)
+                    # Check size after each chunk to stop early if too large
+                    # (Some servers don't send Content-Length header)
+                    if len(chunks) > MAX_IMAGE_BYTES:
+                        raise ValueError(
+                            f"Image exceeded maximum size of {MAX_IMAGE_BYTES // (1024*1024)}MB"
+                        )
+
+            # Convert binary image data to base64 string for Ollama API
+            return base64.b64encode(bytes(chunks)).decode("utf-8")
 
 
 def generate_caption(image_base64: str, prompt: str = DEFAULT_PROMPT) -> str:
