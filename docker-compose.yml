@@ -1,0 +1,61 @@
+# Docker Compose configuration for Alt Text Generator service
+# This service connects to an external Ollama instance for model inference
+
+services:
+  # Main application service
+  dmp-generator:
+    # Build configuration
+    build:
+      context: . # Build context is the current directory
+      dockerfile: Dockerfile # Use the Dockerfile in the root directory
+    # Image name and tag
+    image: dmp-generator:latest
+    # Container name for easier identification
+    container_name: alt-text-generator
+
+    # Environment variables
+    environment:
+      # Connect to Ollama service on the ollama-network
+      # Uses service name 'ollama' for DNS resolution within the network
+      - OLLAMA_HOST=http://ollama:11434
+
+    # GPU configuration
+    # Pin to GPU device 0 only (prevents using other GPUs if multiple are available)
+    gpus:
+      - device_ids: ["0"]
+
+    # Health check configuration
+    # Checks the /up endpoint to verify the service and model are ready
+    # Uses Python's built-in urllib instead of curl (which isn't in python:3.12-slim)
+    healthcheck:
+      test: [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://localhost:5000/up').read()",
+        ] # Health check command
+      interval: 20s # Check every 20 seconds
+      timeout: 10s # Timeout after 10 seconds
+      retries: 15 # Retry up to 15 times before marking as unhealthy
+      start_period: 120s # Allow 120 seconds for initial startup (model loading)
+
+    # Port mapping
+    # Maps host port (from APP_PORT env var or default 23711) to container port 5000
+    ports:
+      - "${APP_PORT:-23711}:5000"
+
+    # Restart policy
+    # Restart unless explicitly stopped (default: unless-stopped)
+    restart: ${RESTART_POLICY:-unless-stopped}
+
+    # Network configuration
+    # Connect to external ollama-network to communicate with Ollama service
+    networks:
+      - ollama-network
+
+# Network configuration
+networks:
+  ollama-network:
+    # Use an existing external network (must be created separately)
+    external: true
+    name: ollama-network
