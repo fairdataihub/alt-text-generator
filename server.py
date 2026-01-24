@@ -55,6 +55,8 @@ ALLOWED_IMAGE_MIME_TYPES = {
 }
 # Maximum number of HTTP redirects to follow (prevents redirect loops)
 MAX_REDIRECTS = 5
+# Maximum prompt length to prevent DoS attacks
+MAX_PROMPT_LENGTH = 2000  # characters
 
 # Blocked IP ranges for SSRF protection
 # These are private/internal IP ranges that should not be accessible
@@ -97,6 +99,10 @@ def validate_url(url: str) -> None:
     Validate URL to prevent SSRF attacks.
     Raises ValueError if URL is invalid or points to blocked resources.
     """
+    # Check URL length to prevent DoS attacks
+    if len(url) > 2048:
+        raise ValueError("URL is too long (maximum 2048 characters)")
+
     # Parse the URL into components (scheme, netloc, path, etc.)
     parsed = urlparse(url)
 
@@ -108,6 +114,11 @@ def validate_url(url: str) -> None:
     # Ensure the URL has a hostname/netloc component
     if not parsed.netloc:
         raise ValueError("Invalid URL: missing host")
+
+    # Block URLs with credentials (username:password@host)
+    # This prevents leaking credentials and reduces attack surface
+    if parsed.username or parsed.password:
+        raise ValueError("URLs with credentials are not allowed")
 
     # Extract hostname (handle port if present)
     # parsed.hostname already strips the port, but fallback handles edge cases
@@ -356,6 +367,21 @@ def generate():
         # Validate that image URL was provided
         if not image_url:
             return "imageUrl parameter is required", 400
+
+        # Validate and sanitize prompt
+        if prompt and isinstance(prompt, str):
+            prompt = prompt.strip()
+            if len(prompt) > MAX_PROMPT_LENGTH:
+                return (
+                    f"Prompt is too long (maximum {MAX_PROMPT_LENGTH} characters)",
+                    400,
+                    {"Content-Type": "text/plain; charset=utf-8"},
+                )
+            # Use default if prompt is empty after trimming
+            if not prompt:
+                prompt = DEFAULT_PROMPT
+        else:
+            prompt = DEFAULT_PROMPT
 
         # Log the request for debugging/monitoring
         logger.info(f"Generating caption for: {image_url}")

@@ -1,0 +1,53 @@
+@import "@nuxt/ui";
+@import "tailwindcss";
+@plugin '@tailwindcss/typography';
+
+@theme {
+  --font-sans: "Inter", sans-serif;
+
+  --auth-color-primary-400: 56 189 248;
+  --auth-color-primary-500: 14 165 233;
+
+  --auth-color-gray-200: 229 231 235;
+  --auth-color-gray-900: 17 24 39;
+  --auth-color-gray-950: 3 7 18;
+
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+}
+
+@theme inline {
+  --animate-aurora: aurora 60s linear infinite;
+  @keyframes aurora {
+    from {
+      background-position:
+        50% 50%,
+        50% 50%;
+    }
+    to {
+      background-position:
+        350% 50%,
+        350% 50%;
+    }
+  }
+}
+
+:root {
+  --ui-radius: var(--radius-lg);
+  --ui-container: var(--container-7xl);
+  --ui-primary: var(--ui-color-primary-500);
+}
+
+.dark {
+  --ui-primary: var(--ui-color-primary-700);
+}
+
+body {
+  @apply text-base;
+}
+
+pre {
+  @apply text-xs whitespace-pre-wrap;
+}
