@@ -49,3 +49,5 @@ venv/
 # Python bytecode and cache files
 __pycache__/
 *.py[cod]  # .pyc, .pyo, .pyd files
+
+.DS_Store

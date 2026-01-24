@@ -1,10 +1,9 @@
-# Workflow to deploy the application to a GPU server
-name: Deploy generator to GPU server
+name: Deploy to Production
 
 # Concurrency control: ensures only one deployment runs at a time
 # If a new deployment starts, it will cancel any in-progress deployment
 concurrency:
-  group: generator-production
+  group: production-deployment
   cancel-in-progress: true
 
 # Trigger conditions: runs on push to main branch or manual trigger
@@ -14,7 +13,9 @@ on:
   workflow_dispatch: # Allows manual triggering from GitHub Actions UI
 
 jobs:
-  deploy:
+  # Deploy the generator application to GPU server
+  deploy-generator:
+    name: Deploy Generator to GPU Server
     runs-on: ubuntu-latest
 
     steps:
@@ -22,9 +23,10 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      # Install rsync utility needed for efficient file synchronization
       - name: Install rsync
-        run: sudo apt-get update && sudo apt-get install -y rsync
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y rsync
 
       # Configure SSH access to the deployment server
       - name: Setup SSH
@@ -80,7 +82,7 @@ jobs:
           # Export port for docker-compose to use
           export APP_PORT=$APP_PORT
 
-          # Verify Docker and Docker Compose are available
+          echo "Verifying Docker installation..."
           docker version
           docker compose version
 
@@ -90,24 +92,27 @@ jobs:
           # --build: rebuild images before starting
           # --remove-orphans: remove containers for services not in compose file
           docker compose -f docker-compose.yml up -d --build --remove-orphans
+
+          echo "Deployment completed successfully"
           EOF
 
       # Health check: verify the application is running and healthy
       - name: Health check
         run: |
-          set -euo pipefail
           REPO_NAME="${GITHUB_REPOSITORY#*/}"
           PORT="${{ secrets.GPU_SERVER_APP_PORT }}"
           PORT="${PORT:-23711}"
 
           ssh -i ~/.ssh/id_ed25519 \
+            -o StrictHostKeyChecking=no \
             "${{ secrets.GPU_SERVER_SSH_USER }}@${{ secrets.GPU_SERVER_SSH_HOST }}" \
-            "REPO_NAME='$REPO_NAME' PORT='$PORT' bash -s" <<'HEALTH_EOF'
+            "REPO_NAME='$REPO_NAME' PORT='$PORT' bash -s" << 'HEALTH_EOF'
           set -euo pipefail
+
           cd "$HOME/deploy/$REPO_NAME"
 
           echo "Waiting for container to start..."
-          timeout=30
+          timeout=60
           elapsed=0
           while [ "$elapsed" -lt "$timeout" ]; do
             if docker compose -f docker-compose.yml ps | grep -q "Up"; then
@@ -118,6 +123,12 @@ jobs:
             elapsed=$((elapsed + 2))
           done
 
+          if [ "$elapsed" -ge "$timeout" ]; then
+            echo "❌ Container failed to start within $timeout seconds"
+            docker compose -f docker-compose.yml logs --tail=50
+            exit 1
+          fi
+
           echo "Performing health check on port $PORT..."
           max_attempts=10
           attempt=1
@@ -125,11 +136,11 @@ jobs:
 
           while [ "$attempt" -le "$max_attempts" ]; do
             echo "Attempt $attempt/$max_attempts..."
-
+            
             response="$(curl -s -w $'\n%{http_code}' "http://localhost:$PORT/up" 2>/dev/null || true)"
             http_code="$(echo "$response" | tail -n1)"
             body="$(echo "$response" | head -n-1)"
-
+            
             if [ "$http_code" = "200" ]; then
               echo "✅ Health check passed! Application is healthy."
               echo "Response: $body"
@@ -140,11 +151,70 @@ jobs:
               echo "❌ Health check failed: HTTP $http_code"
               echo "Response: $body"
             fi
-
+            
             attempt=$((attempt + 1))
             sleep "$wait_time"
           done
 
           echo "❌ Health check failed after $max_attempts attempts"
+          docker compose -f docker-compose.yml logs --tail=50
           exit 1
           HEALTH_EOF
+
+  # Deploy the web application using Kamal
+  deploy-web:
+    name: Deploy Web Application
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+
+    env:
+      DOCKER_BUILDKIT: 1
+      KAMAL_REGISTRY_LOGIN_SERVER: ${{ secrets.KAMAL_REGISTRY_LOGIN_SERVER }}
+      KAMAL_REGISTRY_USERNAME: ${{ secrets.KAMAL_REGISTRY_USERNAME }}
+      KAMAL_REGISTRY_PASSWORD: ${{ secrets.KAMAL_REGISTRY_PASSWORD }}
+      KAMAL_SERVER_IP: ${{ secrets.KAMAL_SERVER_IP }}
+      KAMAL_APP_DOMAIN: ${{ secrets.KAMAL_APP_DOMAIN }}
+      KAMAL_APP_NAME: ${{ secrets.KAMAL_APP_NAME }}
+      API_SERVER_URL: ${{ secrets.API_SERVER_URL }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: 3.3.1
+          bundler-cache: true
+
+      - name: Install Kamal
+        run: gem install kamal
+
+      - name: Set up SSH agent
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.WEB_SERVER_SSH_PRIVATE_KEY }}
+
+      - name: Login to Azure Container Registry
+        uses: azure/docker-login@v1
+        with:
+          login-server: ${{ secrets.KAMAL_REGISTRY_LOGIN_SERVER }}
+          username: ${{ secrets.KAMAL_REGISTRY_USERNAME }}
+          password: ${{ secrets.KAMAL_REGISTRY_PASSWORD }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Verify Kamal installation
+        run: kamal version
+
+      - name: Login to registry on server
+        run: kamal registry login
+
+      - name: Release deployment lock
+        run: kamal lock release
+
+      - name: Deploy application
+        run: kamal redeploy
